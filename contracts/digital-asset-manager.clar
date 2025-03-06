@@ -235,4 +235,61 @@
 
 
 
+;;-----------------------------------------------------------------------------
+;; Access Control Functions
+;;-----------------------------------------------------------------------------
+
+;; Grant asset access permissions
+(define-public (authorize-viewer (asset-id uint) (viewer principal))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+    )
+    ;; Validation checks
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (is-publisher? asset-id tx-sender) RESP_PERMISSION_DENIED)
+    (asserts! (not (is-eq viewer tx-sender)) RESP_INVALID_SHARING)
+
+    ;; Grant access
+    (map-set permission-ledger
+      { asset-id: asset-id, viewer: viewer }
+      { 
+        authorized: true,
+        authorizer: tx-sender,
+        timestamp: block-height
+      }
+    )
+    (ok true)
+  )
+)
+
+;; Remove access permissions
+(define-public (deauthorize-viewer (asset-id uint) (viewer principal))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+      (permission-data (unwrap! (map-get? permission-ledger { asset-id: asset-id, viewer: viewer }) RESP_PERMISSION_DENIED))
+    )
+    ;; Validation checks
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (is-publisher? asset-id tx-sender) RESP_PERMISSION_DENIED)
+    (asserts! (not (is-eq viewer tx-sender)) RESP_INVALID_SHARING)
+
+    ;; Remove permissions
+    (map-delete permission-ledger { asset-id: asset-id, viewer: viewer })
+
+    ;; Clean up bookmarks if present
+    (if (is-bookmarked? asset-id viewer)
+      (map-delete bookmark-registry { viewer: viewer, asset-id: asset-id })
+      true
+    )
+    (ok true)
+  )
+)
+
+;; Verify user access rights
+(define-read-only (verify-access (asset-id uint) (viewer principal))
+  (ok (has-viewing-rights? asset-id viewer))
+)
+
 
