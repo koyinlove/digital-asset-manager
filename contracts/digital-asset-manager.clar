@@ -293,3 +293,97 @@
 )
 
 
+;;-----------------------------------------------------------------------------
+;; Ownership Management Functions
+;;-----------------------------------------------------------------------------
+
+;; Transfer asset ownership
+(define-public (transfer-asset (asset-id uint) (new-publisher principal))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+    )
+    ;; Validation checks
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (is-publisher? asset-id tx-sender) RESP_PERMISSION_DENIED)
+    (asserts! (not (is-eq new-publisher tx-sender)) RESP_INVALID_SHARING)
+    (asserts! (is-valid-user? new-publisher) RESP_INVALID_USER)
+
+    ;; Update ownership record
+    (map-set asset-catalog
+      { asset-id: asset-id }
+      (merge asset-data { publisher: new-publisher })
+    )
+
+    ;; Update access permissions
+    (map-set permission-ledger
+      { asset-id: asset-id, viewer: new-publisher }
+      {
+        authorized: true,
+        authorizer: tx-sender,
+        timestamp: block-height
+      }
+    )
+    (ok true)
+  )
+)
+
+;;-----------------------------------------------------------------------------
+;; Asset Update Functions
+;;-----------------------------------------------------------------------------
+
+;; Modify existing asset details
+(define-public (update-asset (asset-id uint) (new-title (string-ascii 64)) (new-size uint) (new-genre (string-ascii 32)) (new-synopsis (string-ascii 128)) (new-topics (list 10 (string-ascii 32))))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+    )
+    ;; Validate ownership and input
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (is-eq (get publisher asset-data) tx-sender) RESP_PERMISSION_DENIED)
+    (asserts! (> (len new-title) u0) RESP_TITLE_INVALID)
+    (asserts! (< (len new-title) u65) RESP_TITLE_INVALID)
+    (asserts! (> new-size u0) RESP_FILESIZE_INVALID)
+    (asserts! (< new-size u1000000000) RESP_FILESIZE_INVALID)
+    (asserts! (> (len new-genre) u0) RESP_GENRE_INVALID)
+    (asserts! (< (len new-genre) u33) RESP_GENRE_INVALID)
+    (asserts! (> (len new-synopsis) u0) RESP_TITLE_INVALID)
+    (asserts! (< (len new-synopsis) u129) RESP_TITLE_INVALID)
+    (asserts! (are-topics-valid? new-topics) RESP_TITLE_INVALID)
+
+    ;; Update asset record
+    (map-set asset-catalog
+      { asset-id: asset-id }
+      (merge asset-data { 
+        title: new-title, 
+        storage-size: new-size, 
+        genre: new-genre, 
+        synopsis: new-synopsis, 
+        topics: new-topics 
+      })
+    )
+    (ok true)
+  )
+)
+
+;;-----------------------------------------------------------------------------
+;; Asset Removal Functions
+;;-----------------------------------------------------------------------------
+
+;; Remove asset from platform
+(define-public (remove-asset (asset-id uint))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+    )
+    ;; Validation checks
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (is-eq (get publisher asset-data) tx-sender) RESP_PERMISSION_DENIED)
+
+    ;; Delete asset record
+    (map-delete asset-catalog { asset-id: asset-id })
+    (ok true)
+  )
+)
+
+
