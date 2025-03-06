@@ -184,3 +184,55 @@
   )
 )
 
+
+;;-----------------------------------------------------------------------------
+;; User Preference Functions
+;;-----------------------------------------------------------------------------
+
+;; Add asset to personal bookmarks
+(define-public (bookmark-asset (asset-id uint))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+    )
+    ;; Validation checks
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (has-viewing-rights? asset-id tx-sender) RESP_NO_ACCESS)
+    (asserts! (not (is-bookmarked? asset-id tx-sender)) RESP_BOOKMARK_EXISTS)
+
+    ;; Record bookmark
+    (map-insert bookmark-registry
+      { viewer: tx-sender, asset-id: asset-id }
+      {
+        created: block-height,
+        modified: block-height
+      }
+    )
+    (ok true)
+  )
+)
+
+;; Remove asset from personal bookmarks
+(define-public (remove-bookmark (asset-id uint))
+  (let
+    (
+      (asset-data (unwrap! (map-get? asset-catalog { asset-id: asset-id }) RESP_ASSET_MISSING))
+    )
+    ;; Validation checks
+    (asserts! (asset-exists? asset-id) RESP_ASSET_MISSING)
+    (asserts! (is-bookmarked? asset-id tx-sender) RESP_NOT_BOOKMARKED)
+
+    ;; Remove bookmark
+    (map-delete bookmark-registry { viewer: tx-sender, asset-id: asset-id })
+    (ok true)
+  )
+)
+
+;; Check bookmark status for current user
+(define-read-only (get-bookmark-status (asset-id uint))
+  (ok (is-bookmarked? asset-id tx-sender))
+)
+
+
+
+
